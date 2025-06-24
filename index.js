@@ -19,6 +19,20 @@ const db = new sqlite3.Database('./todos.db', (err) => { // Create or open the d
         console.error('Error creating todos table:', err.message);
       } else {
         console.log('Todos table created or already exists.');
+
+        // --- NEW CODE STARTS HERE ---
+        // Add priority column if it doesn't exist
+        db.run(`ALTER TABLE todos ADD COLUMN priority INTEGER DEFAULT 0`, (err) => {
+            if (err) {
+                // Ignore "duplicate column name" error, as it means column already exists
+                if (!err.message.includes('duplicate column name')) {
+                    console.error('Error adding priority column:', err.message);
+                }
+            } else {
+                console.log('Priority column added to todos table.');
+            }
+        });
+        // --- NEW CODE ENDS HERE ---
       }
     });
   }
@@ -38,7 +52,7 @@ app.get('/', (req, res) => {
 
 // GET all todos
 app.get('/todos', (req, res) => {
-  const sql = 'SELECT * FROM todos'; // SQL query to select all todos
+  const sql = 'SELECT id, title, completed, priority FROM todos'; // Select specific columns including priority
   db.all(sql, [], (err, rows) => { // Execute the query
     if (err) {
       res.status(500).json({"error": err.message}); // Send a 500 error if something goes wrong
@@ -51,24 +65,25 @@ app.get('/todos', (req, res) => {
 
 // POST a new todo
 app.post('/todos', (req, res) => {
-  const { title } = req.body; // Extract title from the request body
+  const { title, priority } = req.body; // Extract title and priority
 
   // Basic validation: ensure title is provided
   if (!title) {
     return res.status(400).json({ "error": "Title is required" });
   }
 
-  const sql = `INSERT INTO todos (title, completed) VALUES (?, ?)`;
-  db.run(sql, [title, 0], function(err) { // 'this.lastID' is available only with 'function(err)'
+  const sql = `INSERT INTO todos (title, completed, priority) VALUES (?, ?, ?)`;
+  db.run(sql, [title, 0, priority || 0], function(err) { // Add priority, default to 0 if not provided
     if (err) {
       res.status(500).json({"error": err.message});
       return;
     }
     res.status(201).json({ // Send back the newly created todo
-      id: this.lastID, // Get the ID of the newly inserted row
-      title: title,
-      completed: 0
-    });
+  id: this.lastID, // Get the ID of the newly inserted row
+  title: title,
+  completed: 0,
+  priority: priority || 0 // Include priority in the response
+});
   });
 });
 
@@ -76,16 +91,13 @@ app.post('/todos', (req, res) => {
 // PATCH an existing todo
 app.patch('/todos/:id', (req, res) => {
   const { id } = req.params; // Get the todo ID from the URL parameter
-  const { title, completed } = req.body; // Get title and completed status from request body
+  const { title, completed, priority } = req.body; // Get title, completed, and priority from request body
 
-  // Ensure at least one field is provided for update
-  if (title === undefined && completed === undefined) {
-    return res.status(400).json({ "error": "No fields to update provided." });
-  }
-
+  // Initialize arrays for dynamic query building
   let updates = [];
   let params = [];
 
+  // Add fields to update if they are provided
   if (title !== undefined) {
     updates.push('title = ?');
     params.push(title);
@@ -96,14 +108,23 @@ app.patch('/todos/:id', (req, res) => {
     params.push(completed ? 1 : 0); // Convert boolean to 0 or 1 for SQLite
   }
 
-  if (updates.length === 0) { // Should be caught by the above check, but good for robustness
-    return res.status(400).json({ "error": "No valid fields to update provided." });
+  if (priority !== undefined) {
+    updates.push('priority = ?');
+    params.push(priority);
   }
 
-  params.push(id); // Add the ID to the parameters for the WHERE clause
+  // If no fields were provided for update, send a 400 error
+  if (updates.length === 0) {
+    return res.status(400).json({ "error": "No fields to update provided." });
+  }
 
+  // Add the ID to the parameters for the WHERE clause at the end
+  params.push(id);
+
+  // Construct the SQL query
   const sql = `UPDATE todos SET ${updates.join(', ')} WHERE id = ?`;
 
+  // Execute the update query
   db.run(sql, params, function(err) {
     if (err) {
       res.status(500).json({ "error": err.message });
