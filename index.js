@@ -1,5 +1,8 @@
 const express = require('express'); // Import the express library
+const cors = require('cors'); // Import the CORS middleware
 const app = express(); // Create an Express application instance
+app.use(express.json()); // Middleware to parse JSON request bodies
+app.use(cors()); // Enable CORS for all routes
 const PORT = process.env.PORT || 3000; // Define the port, use environment variable or default to 3000
 
 
