@@ -55,13 +55,14 @@ app.get('/', (req, res) => {
 
 // GET all todos
 app.get('/todos', (req, res) => {
-  const sql = 'SELECT id, title, completed, priority FROM todos'; // Select specific columns including priority
-  db.all(sql, [], (err, rows) => { // Execute the query
+  // Order by priority (highest number first), then by ID (descending) for stable ordering
+  const sql = 'SELECT id, title, completed, priority FROM todos ORDER BY priority DESC, id DESC';
+  db.all(sql, [], (err, rows) => {
     if (err) {
-      res.status(500).json({"error": err.message}); // Send a 500 error if something goes wrong
+      res.status(500).json({"error": err.message});
       return;
     }
-    res.json(rows); // Send the retrieved todos as JSON
+    res.json(rows);
   });
 });
 
