@@ -66,6 +66,25 @@ app.get('/todos', (req, res) => {
 });
 
 
+// GET a single todo by ID
+app.get('/todos/:id', (req, res) => {
+  const { id } = req.params; // Get the ID from the URL
+
+  const sql = 'SELECT id, title, completed, priority FROM todos WHERE id = ?';
+  db.get(sql, id, (err, row) => { // Use db.get for a single row
+    if (err) {
+      res.status(500).json({"error": err.message});
+      return;
+    }
+    if (!row) { // If no row is found
+      res.status(404).json({"error": "Todo not found."});
+      return;
+    }
+    res.json(row); // Send the single todo as JSON
+  });
+});
+
+
 // POST a new todo
 app.post('/todos', (req, res) => {
   const { title, priority } = req.body; // Extract title and priority
